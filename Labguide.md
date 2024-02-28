@@ -93,8 +93,9 @@ Using AWS Polly, Translate and Lambda, create a complete and step by step lab gu
         translate = boto3.client('translate')
         ses = boto3.client('ses')
 
+            # Get the parameters from the event. This function is the entry point for an AWS Lambda function. It receives an event (containing input data) and a context (runtime information). Extracts relevant parameters from the event: text, target_language, and email
+            
         def lambda_handler(event, context):
-            # Get the parameters from the event
             text = event['text']
             target_language = event['targetLanguage']
             email = event['email']
@@ -103,20 +104,20 @@ Using AWS Polly, Translate and Lambda, create a complete and step by step lab gu
             result = translate.translate_text(Text=text, SourceLanguageCode='en', TargetLanguageCode=target_language)
             translated_text = result['TranslatedText']
 
-            # Convert the translated text to speech
+            # Convert the translated text to speech, reads the audio streat into audio_stream
             response = polly.synthesize_speech(VoiceId='Joanna', OutputFormat='mp3', Text=translated_text)
             audio_stream = response['AudioStream'].read()
 
-            # Upload the speech file to S3
+            # Upload the speech file to S3 which generate a unique key (filename) based on current timestamp and upload the s3 bucket with generated key
             key = f"{int(time.time())}.mp3"
             
             # s3.put_object(Bucket='mytests3bucket777', Key=key, Body=audio_stream, ACL='public-read')
             s3.put_object(Bucket='mytests3bucket777', Key=key, Body=audio_stream)
 
-            # Generate a pre-signed URL
+            # Generate a pre-signed URL for accessing audio file and url expires in 1 hour
             url = s3.generate_presigned_url('get_object', Params={'Bucket': 'mytests3bucket777', 'Key': key}, ExpiresIn=3600)
 
-            # Send an email with the URL
+            # Send an email with the URL with status code 200 indicating email was sent with voicemail URL and body f-string (formatted string) to embed expression inside strings. f string contains placeholders for variables
             ses.send_email(
                 Source='atmzht@gmail.com',
                 Destination={'ToAddresses': [email]},
