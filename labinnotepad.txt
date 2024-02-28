@@ -1,0 +1,78 @@
+'''
+Prerequisites
+An AWS account
+Basic knowledge of Python
+AWS CLI installed and configured
+
+Step 1: Create an S3 Bucket
+
+    aws s3api create-bucket --bucket mytests3bucket777 --region us-east-1
+
+Step 2: Create an IAM Role for Lambda (role name LambdaPollyTranslateRole )
+
+        Access required 
+        AmazonPollyFullAccess, 
+        TranslateFullAccess, 
+        AmazonS3FullAccess,
+        AmazonSESFullAccess 
+        TranslateFullAccess
+
+Step 3: Create a Lambda Function
+
+        import boto3
+        import os
+        import time
+
+        # Initialize clients
+        # boto3 is the AWS SDK for python
+'''        
+        s3 = boto3.client('s3')
+        polly = boto3.client('polly')
+        translate = boto3.client('translate')
+        ses = boto3.client('ses')
+
+        def lambda_handler(event, context):
+            # Get the parameters from the event
+            text = event['text']
+            target_language = event['targetLanguage']
+            email = event['email']
+
+            # Translate the text
+            result = translate.translate_text(Text=text, SourceLanguageCode='en', TargetLanguageCode=target_language)
+            translated_text = result['TranslatedText']
+
+            # Convert the translated text to speech
+            response = polly.synthesize_speech(VoiceId='Joanna', OutputFormat='mp3', Text=translated_text)
+            audio_stream = response['AudioStream'].read()
+
+            # Upload the speech file to S3
+            key = f"{int(time.time())}.mp3"
+            
+            # s3.put_object(Bucket='mytests3bucket777', Key=key, Body=audio_stream, ACL='public-read')
+            s3.put_object(Bucket='mytests3bucket777', Key=key, Body=audio_stream)
+
+            # Generate a pre-signed URL
+            url = s3.generate_presigned_url('get_object', Params={'Bucket': 'mytests3bucket777', 'Key': key}, ExpiresIn=3600)
+
+            # Send an email with the URL
+            ses.send_email(
+                Source='atmzht@gmail.com',
+                Destination={'ToAddresses': [email]},
+                Message={
+                    'Subject': {'Data': 'Voicemail Notification'},
+                    'Body': {'Text': {'Data': f"Here is your voicemail: {url}"}}
+                }
+            )
+
+            return {
+                'statusCode': 200,
+                'body': f"Email sent to {email} with voicemail URL."
+            }
+
+Step 4: Trigger the Lambda Function
+
+        {
+        "text": "Hello, this is a test message.",
+        "targetLanguage": "es",
+        "email": "abu_tareq@live.co.uk"
+        }
